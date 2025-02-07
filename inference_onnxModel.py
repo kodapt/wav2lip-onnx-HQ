@@ -552,10 +552,11 @@ def main():
 					mask = cv2.warpAffine(seg_mask, mat_rev,(frame_w, frame_h))
 					
 				if args.face_occluder:
-					seg_mask = occluder.create_occlusion_mask(aligned_face)
+					#seg_mask = occluder.create_occlusion_mask(aligned_face)
+					seg_mask = occluder.create_occlusion_mask(aligned_face_orig)
 					seg_mask = cv2.cvtColor(seg_mask, cv2.COLOR_GRAY2RGB)
 					seg_mask = cv2.rectangle(seg_mask, (5,5), (251,251), (0, 0, 0), 10)
-					seg_mask = cv2.GaussianBlur(seg_mask,(19,19),cv2.BORDER_DEFAULT)
+					seg_mask = cv2.GaussianBlur(seg_mask,(5,5),cv2.BORDER_DEFAULT)
 				
 				if not args.segmentation and not args.face_occluder:
 					mask = cv2.warpAffine(static_face_mask, mat_rev,(frame_w, frame_h))		
