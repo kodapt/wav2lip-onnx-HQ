@@ -26,7 +26,7 @@ I've made some modifications such as:
 * Choose pingpong loop instead of original loop function.
 * Set cut-in/cut-out position to create the loop or cut longer video.
 * Cut-in position = used frame if static is selected.
-* Select the target face area, not  a real face recognition, which also makes inference faster.
+* Select the target face.
 * Use two audio files, eg. vocal for driving and full music mix for final output.
 * This version does not crash if no face is detected, it just continues ...
 
