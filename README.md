@@ -1,6 +1,7 @@
 # wav2lip-onnx-HQ
-Update 2024.10.19
+Update 08.02.2025
 
+  - optmized occlusion mask
   - Replaced insightface with retinaface detection/alignment for easier installation
   - Replaced seg-mask with faster blendmasker
   - Added free cropping of final result video
