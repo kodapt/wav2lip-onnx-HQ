@@ -5,7 +5,7 @@ Update 29.04.2025 (inference_onnxModel_V2.py)
   - added option frame enhancer realEsrgan (clear_reality_x4 model included)
   - added option short fade-in/fade-out
   - added option for facemode 0 or 1 for better result on different face shapes  
-    (0=portrait like orig. wav2lip, 1=square for different mouth opening)
+    (0=portrait like orig. wav2lip, 1=square for less mouth opening)
   - bugfix crashing when using xseg and specific face is not detected  
 
 Update 08.02.2025
