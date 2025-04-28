@@ -1,4 +1,12 @@
 # wav2lip-onnx-HQ
+Update 29.04.2025
+
+  - replaced occlusion mask with xseg occlusion
+  - added option frame enhancer realEsrgan (clear_reality_x4 model included)
+  - added option short fade-in/fade-out
+  - added option for face-crop mode 0 or 1 for better result on different face shapes
+  - bugfix crashing when using xseg and specific face is not detected  
+
 Update 08.02.2025
 
   - optmized occlusion mask
@@ -35,7 +43,9 @@ Type --help for all commandline parameters
 
 .
  
-Model download - https://drive.google.com/drive/folders/1BGl9bmMtlGEMx_wwKufJrZChFyqjnlsQ?usp=sharing
+Model download - https://drive.google.com/drive/folders/1BGl9bmMtlGEMx_wwKufJrZChFyqjnlsQ?usp=sharing  
+
+.
 
 
 Original wav2lip - https://github.com/Rudrabha/Wav2Lip
