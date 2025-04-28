@@ -4,7 +4,8 @@ Update 29.04.2025 (inference_onnxModel_V2.py)
   - replaced occlusion mask with xseg occlusion
   - added option frame enhancer realEsrgan (clear_reality_x4 model included)
   - added option short fade-in/fade-out
-  - added option for face-crop mode 0 or 1 for better result on different face shapes
+  - added option for facemode 0 or 1 for better result on different face shapes  
+    (0=portrait like orig. wav2lip, 1=square for different mouth opening)
   - bugfix crashing when using xseg and specific face is not detected  
 
 Update 08.02.2025
