@@ -1,5 +1,5 @@
 # wav2lip-onnx-HQ
-Update 29.04.2025
+Update 29.04.2025 (inference_onnxModel_V2.py)
 
   - replaced occlusion mask with xseg occlusion
   - added option frame enhancer realEsrgan (clear_reality_x4 model included)
