@@ -68,7 +68,9 @@ Face occluder taken from - https://github.com/facefusion/facefusion-assets/relea
 
 Blendmasker extracted from - https://github.com/mapooon/BlendFace during onnx conversion
 
-Face recognition for specifc face taken from - https://github.com/jahongir7174/FaceID
+Face recognition for specifc face taken from - https://github.com/jahongir7174/FaceID  
+
+Resemble-denoiser-ONNX adopted from - https://github.com/skeskinen/resemble-denoise-onnx-inference
 
 .
 
