@@ -1,4 +1,13 @@
 # wav2lip-onnx-HQ
+
+Update 28.05.2025  
+
+- removed 'final audio' option stuff
+- added resemble audio denoiser to avoid unwanted lip movements  
+  (not as good as vocal separation (eg. KimVocal_v2) but working similar in most cases)
+- minor code optimizations
+  
+
 Update 29.04.2025 (inference_onnxModel_V2.py)
 
   - replaced occlusion mask with xseg occlusion
