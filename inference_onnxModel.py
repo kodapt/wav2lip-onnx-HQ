@@ -1,11 +1,16 @@
+import os, sys
 import subprocess
 import platform
 import numpy as np
-import cv2, os, sys, argparse, audio, shutil
-
+import cv2
+import argparse
+import audio
+import shutil
+import librosa
 from os import listdir, path
 from tqdm import tqdm
 from PIL import Image
+from scipy.io.wavfile import write
 
 import onnxruntime
 onnxruntime.set_default_logger_severity(3)
@@ -19,11 +24,6 @@ detector = RetinaFace("utils/scrfd_2.5g_bnkps.onnx", provider=[("CUDAExecutionPr
 from faceID.faceID import FaceRecognition
 recognition = FaceRecognition('faceID/recognition.onnx')
 
-# audio denoiser
-from resemble_denoiser.resemble_denoiser import ResembleDenoiser
-denoiser = ResembleDenoiser(model_path='resemble_denoiser/denoiser.onnx', use_cuda=True)
-import librosa
-from scipy.io.wavfile import write
 
 # arguments
 parser = argparse.ArgumentParser(description='Inference code to lip-sync videos in the wild using Wav2Lip models')
@@ -53,7 +53,7 @@ parser.add_argument('--frame_enhancer', action="store_true", help="Use frame enh
 parser.add_argument('--face_mask', action="store_true", help="Use face mask")
 parser.add_argument('--face_occluder', action="store_true", help="Use x-seg occluder face mask")
 
-parser.add_argument('--pads', type=int, default=0, help='Padding top, bottom to adjust best mouth position, move crop up/down, between -15 to 15') # pos value mov synced mouth up
+parser.add_argument('--pads', type=int, default=4, help='Padding top, bottom to adjust best mouth position, move crop up/down, between -15 to 15') # pos value mov synced mouth up
 parser.add_argument('--face_mode', type=int, default=0, help='Face crop mode, 0 or 1, rect or square, affects mouth opening' )
 
 parser.add_argument('--preview', default=False, action='store_true', help='Preview during inference')
@@ -70,12 +70,10 @@ args = parser.parse_args()
 
 if args.checkpoint_path == 'checkpoints\wav2lip_384.onnx' or args.checkpoint_path == 'checkpoints\wav2lip_384_fp16.onnx':
 	args.img_size = 384
-	#args.checkpoint_path = 'checkpoints\checkpoint_step000760000.onnx'
 else:
 	args.img_size = 96
 
 mel_step_size = 16
-
 padY = max(-15, min(args.pads, 15))
 
 device = 'cpu'
@@ -111,6 +109,10 @@ if args.face_mask:
 if args.face_occluder:
 		from xseg.xseg import MASK
 		occluder = MASK(model_path="xseg/xseg.onnx", device=device)
+
+if args.denoise:
+	from resemble_denoiser.resemble_denoiser import ResembleDenoiser
+	denoiser = ResembleDenoiser(model_path='resemble_denoiser/denoiser.onnx', device=device)
 				        		    
 if os.path.isfile(args.face) and args.face.split('.')[1] in ['jpg', 'png', 'jpeg']:
 		args.static: args.static = True
