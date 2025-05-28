@@ -206,9 +206,6 @@ def face_detect(images, target_id):
 			else:
 				sub_face = crop_face[65-(padY):241-(padY),42:214]
 				#cv2.imwrite("sub_1.jpg",sub_face)
-						
-			#cv2.imshow("S",sub_face)  
-			#cv2.waitKey()
 			
 			sub_face = cv2.resize(sub_face, (args.img_size,args.img_size))
   
@@ -276,13 +273,19 @@ def main():
 	static_face_mask = cv2.ellipse(static_face_mask, (112,122), (46,23),0,0,360,(0,0,0), -1)
 	static_face_mask = cv2.resize(static_face_mask,(256,256))
 	
-	static_face_mask = cv2.rectangle(static_face_mask, (0,236), (256,256),(0,0,0), -1)
+	static_face_mask = cv2.rectangle(static_face_mask, (0,246), (246,246),(0,0,0), -1)
 	static_face_mask = cv2.cvtColor(static_face_mask, cv2.COLOR_GRAY2RGB)/255
-	static_face_mask = cv2.GaussianBlur(static_face_mask,(29,29),cv2.BORDER_DEFAULT)
+	static_face_mask = cv2.GaussianBlur(static_face_mask,(19,19),cv2.BORDER_DEFAULT)
 
 	sub_face_mask = np.zeros((256,256), dtype=np.uint8)
-	sub_face_mask = cv2.rectangle(sub_face_mask, (66,69), (190,240),(255,255,255), -1)
-	sub_face_mask = cv2.GaussianBlur(sub_face_mask.astype(np.uint8),(9,9),cv2.BORDER_DEFAULT)
+	
+	#if args.face_mode == 0:
+	#	sub_face_mask = cv2.rectangle(sub_face_mask, (62, 65 - padY), (194, 241 - padY), (255, 255, 255), -1) #0
+	#else:
+	#	sub_face_mask = cv2.rectangle(sub_face_mask, (42, 65 - padY), (214, 241 - padY), (255, 255, 255), -1) #1
+	
+	sub_face_mask = cv2.rectangle(sub_face_mask, (42, 65 - padY), (214, 249), (255, 255, 255), -1) #1
+	sub_face_mask = cv2.GaussianBlur(sub_face_mask.astype(np.uint8),(29,29),cv2.BORDER_DEFAULT)
 	sub_face_mask = cv2.cvtColor(sub_face_mask, cv2.COLOR_GRAY2RGB)		
 	sub_face_mask = sub_face_mask/255
 		
@@ -372,11 +375,11 @@ def main():
   
   # convert input audio to wav anyway:
 	print('Extracting raw audio...')
-	command = 'ffmpeg -y -i {} -ac 1 -strict -2 {}'.format(args.audio, 'temp/temp.wav')
-	subprocess.call(command, shell=True)
+	subprocess.run(['ffmpeg', '-y', '-i', args.audio, '-ac', '1', '-strict', '-2', 'temp/temp.wav'])
+
 	os.system('cls')
 	print('Raw audio extracted')
-		
+
   # denoise extracted audio:
 	if args.denoise:
 		print('Denoising audio...')
