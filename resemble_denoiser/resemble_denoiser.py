@@ -2,24 +2,23 @@ import numpy as np
 import onnxruntime
 from librosa import stft, istft
 
-
 class ResembleDenoiser:
-    def __init__(self, model_path='denoiser_fp16.onnx', use_cuda=True):
+    def __init__(self, model_path='denoiser_fp16.onnx', device='cpu'):
         self.stft_hop_length = 420
         self.win_length = self.n_fft = 4 * self.stft_hop_length
-        self.session = self._load_model(model_path, use_cuda)
 
-    def _load_model(self, model_path, use_cuda):
-        opts = onnxruntime.SessionOptions()
-        opts.inter_op_num_threads = 4
-        opts.intra_op_num_threads = 4
-        opts.log_severity_level = 4
+        session_options = onnxruntime.SessionOptions()
+        session_options.graph_optimization_level = onnxruntime.GraphOptimizationLevel.ORT_ENABLE_ALL
+        session_options.inter_op_num_threads = 4
+        session_options.intra_op_num_threads = 4
+        session_options.log_severity_level = 4
 
-        providers = ["CUDAExecutionProvider"] if use_cuda else ["CPUExecutionProvider"]
-        session = onnxruntime.InferenceSession(
-            model_path, providers=providers, sess_options=opts
-        )
-        return session
+        providers = ["CPUExecutionProvider"]
+        if device == 'cuda':
+            providers = [("CUDAExecutionProvider", {"cudnn_conv_algo_search": "DEFAULT"}), "CPUExecutionProvider"]
+
+        self.session = onnxruntime.InferenceSession(model_path, sess_options=session_options, providers=providers)
+
 
     def _stft(self, x):
         s = stft(
