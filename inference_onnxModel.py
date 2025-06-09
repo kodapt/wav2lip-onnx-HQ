@@ -11,6 +11,7 @@ from os import listdir, path
 from tqdm import tqdm
 from PIL import Image
 from scipy.io.wavfile import write
+import gc
 
 import onnxruntime
 onnxruntime.set_default_logger_severity(3)
@@ -251,6 +252,7 @@ def datagen(frames, mels):
 
 		img_masked = img_batch.copy()
 		img_masked[:, args.img_size//2:] = 0
+		#img_masked[:, :, args.img_size // 2:, :] = 0
 		
 		img_batch = np.concatenate((img_masked, img_batch), axis=3) / 255.
 		mel_batch = np.reshape(mel_batch, [len(mel_batch), mel_batch.shape[1], mel_batch.shape[2], 1])
@@ -386,8 +388,13 @@ def main():
 		wav, sr = librosa.load('temp/temp.wav', sr=44100, mono=True)
 		wav_denoised, new_sr = denoiser.denoise(wav, sr, batch_process_chunks=False)
 		write('temp/temp.wav', new_sr, (wav_denoised * 32767).astype(np.int16))
+		try:
+			if hasattr(denoiser, 'session'):
+				del denoiser.session
+				gc.collect()
+		except:
+			pass
 
-	
 	wav = audio.load_wav('temp/temp.wav', 16000)
 	mel = audio.melspectrogram(wav)
 
@@ -479,13 +486,14 @@ def main():
 		for p, f in zip(pred, frames):			
 				
 			if not args.static: fc = fc + 1
-			
+
       # crop mode:
 			if args.face_mode == 0:
 				p = cv2.resize(p,(132,176))
 			else:
 				p = cv2.resize(p,(172,176))
-			
+
+				
 			if args.face_mode == 0:
 				p_aligned[65-(padY):241-(padY),62:194] = p
 			else:
