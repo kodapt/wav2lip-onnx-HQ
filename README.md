@@ -3,7 +3,7 @@
 Update 09.06.2025
 
 - added garbage collection to free ram/vram after denoising audio  
-  tested on RTX3060/6bg running inference using audio denoiser, occlusion mask, face enhancer and frame enhancer at same time
+  tested on RTX3060/6Gb running inference using audio denoiser, occlusion mask, face enhancer and frame enhancer at same time
   
 
 Update 28.05.2025  
