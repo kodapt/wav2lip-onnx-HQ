@@ -16,14 +16,9 @@ import gc
 import onnxruntime
 onnxruntime.set_default_logger_severity(3)
 
-# -------- PATH HANDLING FIX --------
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-
-def safe_path(p):
-    # If already absolute, return as is. If relative, resolve to script location.
-    if os.path.isabs(p):
-        return p
-    return os.path.join(SCRIPT_DIR, p)
+# Resolve all resource files relative to script location (not cwd)
+def resource_path(rel_path):
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), rel_path)
 
 # face detection and alignment
 from utils.retinaface import RetinaFace
@@ -67,12 +62,6 @@ parser.add_argument('--headless', default=False, action='store_true', help="Run 
 
 args = parser.parse_args()
 
-# --- Patch user-provided arguments for path robustness ---
-args.face = safe_path(args.face)
-args.audio = safe_path(args.audio)
-args.checkpoint_path = safe_path(args.checkpoint_path)
-args.outfile = safe_path(args.outfile)
-
 if args.checkpoint_path.endswith('wav2lip_384.onnx') or args.checkpoint_path.endswith('wav2lip_384_fp16.onnx'):
     args.img_size = 384
 else:
@@ -86,45 +75,46 @@ if onnxruntime.get_device() == 'GPU':
     device = 'cuda'
 print("Running on " + device)
 
+# Load detector/recognition AFTER args parsing!
 providers = ["CPUExecutionProvider"]
 if device == 'cuda':
     providers = [("CUDAExecutionProvider", {"cudnn_conv_algo_search": "DEFAULT"}),"CPUExecutionProvider"]
 
-# ----- All model/data loads are now robust -----
-detector = RetinaFace(safe_path("utils/scrfd_2.5g_bnkps.onnx"), provider=providers, session_options=None)
-recognition = FaceRecognition(safe_path('faceID/recognition.onnx'))
+# --- FIXED: all model file paths resolve relative to script ---
+detector = RetinaFace(resource_path("utils/scrfd_2.5g_bnkps.onnx"), provider=providers, session_options=None)
+recognition = FaceRecognition(resource_path('faceID/recognition.onnx'))
 
 if args.enhancer == 'gpen':
     from enhancers.GPEN.GPEN import GPEN
-    enhancer = GPEN(model_path=safe_path("enhancers/GPEN/GPEN-BFR-256-sim.onnx"), device=device)
+    enhancer = GPEN(model_path=resource_path("enhancers/GPEN/GPEN-BFR-256-sim.onnx"), device=device) #GPEN-BFR-256-sim
 
 if args.enhancer == 'codeformer':
     from enhancers.Codeformer.Codeformer import CodeFormer
-    enhancer = CodeFormer(model_path=safe_path("enhancers/Codeformer/codeformerfixed.onnx"), device=device)
+    enhancer = CodeFormer(model_path=resource_path("enhancers/Codeformer/codeformerfixed.onnx"), device=device)
     
 if args.enhancer == 'restoreformer':
     from enhancers.restoreformer.restoreformer16 import RestoreFormer
-    enhancer = RestoreFormer(model_path=safe_path("enhancers/restoreformer/restoreformer16.onnx"), device=device)
+    enhancer = RestoreFormer(model_path=resource_path("enhancers/restoreformer/restoreformer16.onnx"), device=device)
         
 if args.enhancer == 'gfpgan':
     from enhancers.GFPGAN.GFPGAN import GFPGAN
-    enhancer = GFPGAN(model_path=safe_path("enhancers/GFPGAN/GFPGANv1.4.onnx"), device=device)
+    enhancer = GFPGAN(model_path=resource_path("enhancers/GFPGAN/GFPGANv1.4.onnx"), device=device)
 
 if args.frame_enhancer:
     from enhancers.RealEsrgan.esrganONNX import RealESRGAN_ONNX
-    frame_enhancer = RealESRGAN_ONNX(model_path=safe_path("enhancers/RealEsrgan/clear_reality_x4.onnx"), device=device)
+    frame_enhancer = RealESRGAN_ONNX(model_path=resource_path("enhancers/RealEsrgan/clear_reality_x4.onnx"), device=device)
     
 if args.face_mask:
     from blendmasker.blendmask import BLENDMASK
-    masker = BLENDMASK(model_path=safe_path("blendmasker/blendmasker.onnx"), device=device)
+    masker = BLENDMASK(model_path=resource_path("blendmasker/blendmasker.onnx"), device=device)
         
 if args.face_occluder:
     from xseg.xseg import MASK
-    occluder = MASK(model_path=safe_path("xseg/xseg.onnx"), device=device)
+    occluder = MASK(model_path=resource_path("xseg/xseg.onnx"), device=device)
 
 if args.denoise:
     from resemble_denoiser.resemble_denoiser import ResembleDenoiser
-    denoiser = ResembleDenoiser(model_path=safe_path('resemble_denoiser/denoiser.onnx'), device=device)
+    denoiser = ResembleDenoiser(model_path=resource_path('resemble_denoiser/denoiser.onnx'), device=device)
                                     
 if os.path.isfile(args.face) and args.face.split('.')[-1] in ['jpg', 'png', 'jpeg']:
     args.static = True
@@ -155,15 +145,15 @@ def select_specific_face(model, spec_img, size, crop_scale=1.0):
     target_id = recognition(target_face)[0].flatten()
     return target_id
 
-# ... everything else unchanged: your logic, your functions, etc.
+# ... your unchanged function definitions for process_video_specific, face_detect, datagen go here ...
+# (not repeating them for brevity, but leave them as they are in your script)
 
 def main():
-    # ... unchanged setup code, as in your original file ...
-
+    # ... your unchanged setup code ...
     if not os.path.isfile(args.face):
         raise ValueError('--face argument must be a valid path to video/image file')
 
-    elif args.face.split('.')[-1] in ['jpg', 'png', 'jpeg', 'bmp']:
+    if args.face.split('.')[-1] in ['jpg', 'png', 'jpeg', 'bmp']:
         orig_frame = cv2.imread(args.face)
         orig_frame = cv2.resize(orig_frame, (orig_frame.shape[1]//args.resize_factor, orig_frame.shape[0]//args.resize_factor))	
         orig_frames = [orig_frame]
@@ -211,7 +201,7 @@ def main():
                     if roi == (0,0,0,0): roi = (0,0,w,h)
                     cv2.destroyAllWindows()
                 cropped_roi = frame[int(roi[1]):int(roi[1]+roi[3]), int(roi[0]):int(roi[0]+roi[2])]
-                os.system('cls')
+                # os.system('cls') # Remove for Colab/Unix compatibility
                 target_id = select_specific_face(detector, cropped_roi, 256, crop_scale=1)
                 orig_h, orig_w = cropped_roi.shape[:-1]
                 print("Reading frames....")
@@ -219,25 +209,60 @@ def main():
             cropped_roi = frame[int(roi[1]):int(roi[1]+roi[3]), int(roi[0]):int(roi[0]+roi[2])]
             full_frames.append(cropped_roi)
             orig_frames.append(cropped_roi)
-    
-    # ... your unchanged preprocessing code for memory, audio, etc...
 
-    # datagen, inference loop, etc...
-    # (All your logic as before...)
+    # --------- PREPROCESS AUDIO AND MEL ----------
+    print('Extracting raw audio...')
+    os.makedirs('temp', exist_ok=True)
+    subprocess.run(['ffmpeg', '-y', '-i', args.audio, '-ac', '1', '-strict', '-2', 'temp/temp.wav'])
 
-    for i, (img_batch, mel_batch, frames) in enumerate(tqdm(gen, total=int(np.ceil(float(len(mel_chunks)))))):
-        # ... your inference code ...
-        if args.preview and not args.headless:
-            cv2.imshow("Result - press ESC to stop and save",final)
-            k = cv2.waitKey(1)
-            if k == 27:
-                cv2.destroyAllWindows()
-                out.release()
-                break
-            if k == ord('s'):
-                args.sharpen = not args.sharpen
-                print ("Sharpen = " + str(args.sharpen))
-        # ... rest of loop ...
+    print('Raw audio extracted')
+
+    if args.denoise:
+        print('Denoising audio...')
+        wav, sr = librosa.load('temp/temp.wav', sr=44100, mono=True)
+        wav_denoised, new_sr = denoiser.denoise(wav, sr, batch_process_chunks=False)
+        write('temp/temp.wav', new_sr, (wav_denoised * 32767).astype(np.int16))
+        try:
+            if hasattr(denoiser, 'session'):
+                del denoiser.session
+                gc.collect()
+        except:
+            pass
+
+    wav = audio.load_wav('temp/temp.wav', 16000)
+    mel = audio.melspectrogram(wav)
+    if np.isnan(mel.reshape(-1)).sum() > 0:
+        raise ValueError('Mel contains nan! Using a TTS voice? Add a small epsilon noise to the wav file and try again')
+
+    mel_chunks = []
+    mel_idx_multiplier = 80. / fps
+    i = 0
+    while True:
+        start_idx = int(i * mel_idx_multiplier)
+        if start_idx + mel_step_size > len(mel[0]):
+            mel_chunks.append(mel[:, len(mel[0]) - mel_step_size:])
+            break
+        mel_chunks.append(mel[:, start_idx: start_idx + mel_step_size])
+        i += 1
+    print("Length of mel chunks: {}".format(len(mel_chunks)))
+    full_frames = full_frames[:len(mel_chunks)]
+
+    # --------- FACE DETECTION ---------
+    aligned_faces, sub_faces, matrix, no_face = face_detect(full_frames, target_id)
+
+    if args.pingpong:
+        orig_frames = orig_frames + orig_frames[::-1]
+        full_frames = full_frames + full_frames[::-1]
+        aligned_faces = aligned_faces + aligned_faces[::-1]
+        sub_faces = sub_faces + sub_faces[::-1]
+        matrix = matrix + matrix[::-1]
+        no_face = no_face + no_face[::-1]
+
+    # --------- GENERATOR ---------
+    gen = datagen(sub_faces.copy(), mel_chunks)
+
+    # --------- REST OF INFERENCE LOOP (UNCHANGED) ---------
+    # ... (Your full existing inference code here) ...
 
 if __name__ == '__main__':
     main()
