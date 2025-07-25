@@ -23,7 +23,6 @@ from utils.face_alignment import get_cropped_head_256
 # specific face selector
 from faceID.faceID import FaceRecognition
 
-# arguments
 parser = argparse.ArgumentParser(description='Inference code to lip-sync videos in the wild using Wav2Lip models')
 
 parser.add_argument('--checkpoint_path', type=str, help='Name of saved checkpoint to load weights from', required=True)
@@ -55,7 +54,6 @@ parser.add_argument('--pads', type=int, default=4, help='Padding top, bottom to 
 parser.add_argument('--face_mode', type=int, default=0, help='Face crop mode, 0 or 1, rect or square, affects mouth opening' )
 
 parser.add_argument('--preview', default=False, action='store_true', help='Preview during inference')
-
 parser.add_argument('--headless', default=False, action='store_true', help="Run in headless mode (Colab/Docker, disables OpenCV windows)")
 
 args = parser.parse_args()
@@ -127,7 +125,6 @@ def load_model(device):
     return session
 
 def select_specific_face(model, spec_img, size, crop_scale=1.0):
-    # --- PATCH: no cv2.selectROI in headless ---
     h, w = spec_img.shape[:-1]
     if args.headless:
         roi = (0, 0, w, h)
@@ -143,10 +140,11 @@ def select_specific_face(model, spec_img, size, crop_scale=1.0):
     target_id = recognition(target_face)[0].flatten()
     return target_id
 
-# ... rest of your code ...
+# Your other function definitions (process_video_specific, face_detect, datagen) remain unchanged...
 
 def main():
-    # ... [unchanged code above] ...
+    # ... your unchanged setup code ...
+
     if not os.path.isfile(args.face):
         raise ValueError('--face argument must be a valid path to video/image file')
 
@@ -156,7 +154,6 @@ def main():
         orig_frames = [orig_frame]
         fps = args.fps
 
-        # --- PATCH: no cv2.selectROI in headless ---
         h, w = orig_frame.shape[:-1]
         if args.headless:
             roi = (0, 0, w, h)
@@ -167,7 +164,6 @@ def main():
         cropped_roi = orig_frame[int(roi[1]):int(roi[1]+roi[3]), int(roi[0]):int(roi[0]+roi[2])]
         full_frames = [cropped_roi]
         orig_h, orig_w = cropped_roi.shape[:-1]
-        #	select specific face:
         target_id = select_specific_face(detector, cropped_roi, 256, crop_scale=1)
             
     else:
@@ -201,7 +197,6 @@ def main():
                     cv2.destroyAllWindows()
                 cropped_roi = frame[int(roi[1]):int(roi[1]+roi[3]), int(roi[0]):int(roi[0]+roi[2])]
                 os.system('cls')
-                # select_specific_face:
                 target_id = select_specific_face(detector, cropped_roi, 256, crop_scale=1)
                 orig_h, orig_w = cropped_roi.shape[:-1]
                 print("Reading frames....")
@@ -209,24 +204,25 @@ def main():
             cropped_roi = frame[int(roi[1]):int(roi[1]+roi[3]), int(roi[0]):int(roi[0]+roi[2])]
             full_frames.append(cropped_roi)
             orig_frames.append(cropped_roi)
+    
+    # ... your unchanged preprocessing code for memory, audio, etc...
 
-    # ... [your unchanged code for the rest of main] ...
-    # ----
+    # datagen, inference loop, etc...
+    # (Keep all your original code, but be sure that "if args.preview:" and the break statement stay inside the inference for-loop!)
 
-    # --- PATCH: Preview logic ---
-    # Only show preview if not headless
-    if args.preview and not args.headless:
-        cv2.imshow("Result - press ESC to stop and save", final)
-        k = cv2.waitKey(1)
-        if k == 27:
-            cv2.destroyAllWindows()
-            out.release()
-            break
-        if k == ord('s'):
-            args.sharpen = not args.sharpen
-            print ('')    
-            print ("Sharpen = " + str(args.sharpen))
-    # ----
+    for i, (img_batch, mel_batch, frames) in enumerate(tqdm(gen, total=int(np.ceil(float(len(mel_chunks)))))):
+        # ... your inference code ...
+        if args.preview and not args.headless:
+            cv2.imshow("Result - press ESC to stop and save",final)
+            k = cv2.waitKey(1)
+            if k == 27:
+                cv2.destroyAllWindows()
+                out.release()
+                break
+            if k == ord('s'):
+                args.sharpen = not args.sharpen
+                print ("Sharpen = " + str(args.sharpen))
+        # ... rest of loop ...
 
 if __name__ == '__main__':
     main()
