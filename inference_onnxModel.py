@@ -16,17 +16,23 @@ import gc
 import onnxruntime
 onnxruntime.set_default_logger_severity(3)
 
-# Resolve all resource files relative to script location (not cwd)
-def resource_path(rel_path):
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), rel_path)
+# === Get script root for all paths ===
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# All model/data files are loaded relative to SCRIPT_DIR:
+def absp(rel):  # Always use this for weights/models!
+    return os.path.join(SCRIPT_DIR, rel)
 
 # face detection and alignment
 from utils.retinaface import RetinaFace
 from utils.face_alignment import get_cropped_head_256
+detector = RetinaFace(absp("utils/scrfd_2.5g_bnkps.onnx"), provider=[("CUDAExecutionProvider", {"cudnn_conv_algo_search": "DEFAULT"}), "CPUExecutionProvider"], session_options=None)
 
 # specific face selector
 from faceID.faceID import FaceRecognition
+recognition = FaceRecognition(absp('faceID/recognition.onnx'))
 
+# arguments
 parser = argparse.ArgumentParser(description='Inference code to lip-sync videos in the wild using Wav2Lip models')
 
 parser.add_argument('--checkpoint_path', type=str, help='Name of saved checkpoint to load weights from', required=True)
@@ -58,9 +64,19 @@ parser.add_argument('--pads', type=int, default=4, help='Padding top, bottom to 
 parser.add_argument('--face_mode', type=int, default=0, help='Face crop mode, 0 or 1, rect or square, affects mouth opening' )
 
 parser.add_argument('--preview', default=False, action='store_true', help='Preview during inference')
-parser.add_argument('--headless', default=False, action='store_true', help="Run in headless mode (Colab/Docker, disables OpenCV windows)")
+parser.add_argument('--headless', default=False, action='store_true', help="Run in headless mode (Colab/Docker/SSH, disables OpenCV windows)")
 
 args = parser.parse_args()
+
+# --- Path fix for model/checkpoint if not abs ---
+if not os.path.isabs(args.checkpoint_path):
+    args.checkpoint_path = absp(args.checkpoint_path)
+if not os.path.isabs(args.face):
+    args.face = os.path.abspath(args.face)
+if not os.path.isabs(args.audio):
+    args.audio = os.path.abspath(args.audio)
+if not os.path.isabs(args.outfile):
+    args.outfile = os.path.abspath(args.outfile)
 
 if args.checkpoint_path.endswith('wav2lip_384.onnx') or args.checkpoint_path.endswith('wav2lip_384_fp16.onnx'):
     args.img_size = 384
@@ -75,48 +91,39 @@ if onnxruntime.get_device() == 'GPU':
     device = 'cuda'
 print("Running on " + device)
 
-# Load detector/recognition AFTER args parsing!
-providers = ["CPUExecutionProvider"]
-if device == 'cuda':
-    providers = [("CUDAExecutionProvider", {"cudnn_conv_algo_search": "DEFAULT"}),"CPUExecutionProvider"]
-
-# --- FIXED: all model file paths resolve relative to script ---
-detector = RetinaFace(resource_path("utils/scrfd_2.5g_bnkps.onnx"), provider=providers, session_options=None)
-recognition = FaceRecognition(resource_path('faceID/recognition.onnx'))
-
 if args.enhancer == 'gpen':
     from enhancers.GPEN.GPEN import GPEN
-    enhancer = GPEN(model_path=resource_path("enhancers/GPEN/GPEN-BFR-256-sim.onnx"), device=device) #GPEN-BFR-256-sim
+    enhancer = GPEN(model_path=absp("enhancers/GPEN/GPEN-BFR-256-sim.onnx"), device=device) #GPEN-BFR-256-sim
 
 if args.enhancer == 'codeformer':
     from enhancers.Codeformer.Codeformer import CodeFormer
-    enhancer = CodeFormer(model_path=resource_path("enhancers/Codeformer/codeformerfixed.onnx"), device=device)
+    enhancer = CodeFormer(model_path=absp("enhancers/Codeformer/codeformerfixed.onnx"), device=device)
     
 if args.enhancer == 'restoreformer':
     from enhancers.restoreformer.restoreformer16 import RestoreFormer
-    enhancer = RestoreFormer(model_path=resource_path("enhancers/restoreformer/restoreformer16.onnx"), device=device)
+    enhancer = RestoreFormer(model_path=absp("enhancers/restoreformer/restoreformer16.onnx"), device=device)
         
 if args.enhancer == 'gfpgan':
     from enhancers.GFPGAN.GFPGAN import GFPGAN
-    enhancer = GFPGAN(model_path=resource_path("enhancers/GFPGAN/GFPGANv1.4.onnx"), device=device)
+    enhancer = GFPGAN(model_path=absp("enhancers/GFPGAN/GFPGANv1.4.onnx"), device=device)
 
 if args.frame_enhancer:
     from enhancers.RealEsrgan.esrganONNX import RealESRGAN_ONNX
-    frame_enhancer = RealESRGAN_ONNX(model_path=resource_path("enhancers/RealEsrgan/clear_reality_x4.onnx"), device=device)
+    frame_enhancer = RealESRGAN_ONNX(model_path=absp("enhancers/RealEsrgan/clear_reality_x4.onnx"), device=device)
     
 if args.face_mask:
     from blendmasker.blendmask import BLENDMASK
-    masker = BLENDMASK(model_path=resource_path("blendmasker/blendmasker.onnx"), device=device)
+    masker = BLENDMASK(model_path=absp("blendmasker/blendmasker.onnx"), device=device)
         
 if args.face_occluder:
     from xseg.xseg import MASK
-    occluder = MASK(model_path=resource_path("xseg/xseg.onnx"), device=device)
+    occluder = MASK(model_path=absp("xseg/xseg.onnx"), device=device)
 
 if args.denoise:
     from resemble_denoiser.resemble_denoiser import ResembleDenoiser
-    denoiser = ResembleDenoiser(model_path=resource_path('resemble_denoiser/denoiser.onnx'), device=device)
-                                    
-if os.path.isfile(args.face) and args.face.split('.')[-1] in ['jpg', 'png', 'jpeg']:
+    denoiser = ResembleDenoiser(model_path=absp('resemble_denoiser/denoiser.onnx'), device=device)
+                                  
+if os.path.isfile(args.face) and args.face.split('.')[-1].lower() in ['jpg', 'png', 'jpeg']:
     args.static = True
 
 def load_model(device):
@@ -145,32 +152,117 @@ def select_specific_face(model, spec_img, size, crop_scale=1.0):
     target_id = recognition(target_face)[0].flatten()
     return target_id
 
-# ... your unchanged function definitions for process_video_specific, face_detect, datagen go here ...
-# (not repeating them for brevity, but leave them as they are in your script)
+def process_video_specific(model, img, size, target_id, crop_scale=1.0):
+    ori_img = img
+    bboxes, kpss = model.detect(ori_img, input_size=(320, 320), det_thresh=0.3)
+    assert len(kpss) != 0, "No face detected"
+    best_score = -float('inf')
+    best_aimg = None
+    best_mat = None
+    for kps in kpss:
+        aimg, mat = get_cropped_head_256(ori_img, kps, size=size, scale=crop_scale)
+        face = aimg.copy()
+        face = cv2.resize(face, (112, 112))
+        face_id = recognition(face)[0].flatten()
+        score = target_id @ face_id  # Dot product or cosine similarity
+        if score > best_score:
+            best_score = score
+            best_aimg = aimg
+            best_mat = mat
+        if best_score < 0.4:
+            best_aimg = np.zeros((256,256), dtype=np.uint8)
+            best_aimg = cv2.cvtColor(best_aimg, cv2.COLOR_GRAY2RGB)/255
+            best_mat = np.float32([[1,2,3],[1,2,3]])
+    return best_aimg, best_mat
+
+def face_detect(images, target_id):
+    if not args.headless:
+        os.system('cls' if os.name == 'nt' else 'clear')
+    print ("Detecting face and generating data...")
+    crop_size = 256
+    sub_faces = []
+    crop_faces = []
+    matrix = []
+    face_error = []
+    for i in tqdm(range(0, len(images))):
+        try:
+            crop_face, M = process_video_specific(detector, images[i], 256, target_id, crop_scale=1.0)
+            if args.face_mode == 0:
+                sub_face = crop_face[65-(padY):241-(padY),62:194]
+            else:
+                sub_face = crop_face[65-(padY):241-(padY),42:214]
+            sub_face = cv2.resize(sub_face, (args.img_size,args.img_size))
+            sub_faces.append(sub_face)		
+            crop_faces.append(crop_face)
+            matrix.append(M)
+            no_face = 0
+        except:
+            if i == 0:
+                crop_face = np.zeros((256,256), dtype=np.uint8)
+                crop_face = cv2.cvtColor(crop_face, cv2.COLOR_GRAY2RGB)/255
+                sub_face = crop_face[65-(padY):241-(padY),62:194]
+                sub_face = cv2.resize(sub_face, (args.img_size,args.img_size))
+                M = np.float32([[1,2,3],[1,2,3]])
+            sub_faces.append(sub_face)		
+            crop_faces.append(crop_face)
+            matrix.append(M)
+            no_face = -1
+        face_error.append(no_face)
+    return crop_faces, sub_faces, matrix, face_error
+
+def datagen(frames, mels):
+    img_batch, mel_batch, frame_batch = [], [], []
+    for i, m in enumerate(mels):
+        idx = 0 if args.static else i%len(frames)
+        frame_to_save = frames[idx].copy()
+        frame_batch.append(frame_to_save)
+        img_batch.append(frames[idx])
+        mel_batch.append(m)
+        img_batch, mel_batch = np.asarray(img_batch), np.asarray(mel_batch)
+        img_masked = img_batch.copy()
+        img_masked[:, args.img_size//2:] = 0
+        img_batch = np.concatenate((img_masked, img_batch), axis=3) / 255.
+        mel_batch = np.reshape(mel_batch, [len(mel_batch), mel_batch.shape[1], mel_batch.shape[2], 1])
+        yield img_batch, mel_batch, frame_batch
+        img_batch, mel_batch, frame_batch = [], [], []
 
 def main():
-    # ... your unchanged setup code ...
+    if args.hq_output:
+        if not os.path.exists('hq_temp'):
+            os.mkdir('hq_temp')
+    preset='medium'
+    blend = args.blending/10
+    static_face_mask = np.zeros((224,224), dtype=np.uint8)
+    static_face_mask = cv2.ellipse(static_face_mask, (112,162), (62,54),0,0,360,(255,255,255), -1)
+    static_face_mask = cv2.ellipse(static_face_mask, (112,122), (46,23),0,0,360,(0,0,0), -1)
+    static_face_mask = cv2.resize(static_face_mask,(256,256))
+    static_face_mask = cv2.rectangle(static_face_mask, (0,246), (246,246),(0,0,0), -1)
+    static_face_mask = cv2.cvtColor(static_face_mask, cv2.COLOR_GRAY2RGB)/255
+    static_face_mask = cv2.GaussianBlur(static_face_mask,(19,19),cv2.BORDER_DEFAULT)
+    sub_face_mask = np.zeros((256,256), dtype=np.uint8)
+    sub_face_mask = cv2.rectangle(sub_face_mask, (42, 65 - padY), (214, 249), (255, 255, 255), -1)
+    sub_face_mask = cv2.GaussianBlur(sub_face_mask.astype(np.uint8),(29,29),cv2.BORDER_DEFAULT)
+    sub_face_mask = cv2.cvtColor(sub_face_mask, cv2.COLOR_GRAY2RGB)		
+    sub_face_mask = sub_face_mask/255
+    im = cv2.imread(args.face)
     if not os.path.isfile(args.face):
         raise ValueError('--face argument must be a valid path to video/image file')
-
-    if args.face.split('.')[-1] in ['jpg', 'png', 'jpeg', 'bmp']:
+    elif args.face.split('.')[-1].lower() in ['jpg', 'png', 'jpeg', 'bmp']:
         orig_frame = cv2.imread(args.face)
         orig_frame = cv2.resize(orig_frame, (orig_frame.shape[1]//args.resize_factor, orig_frame.shape[0]//args.resize_factor))	
         orig_frames = [orig_frame]
         fps = args.fps
-
         h, w = orig_frame.shape[:-1]
         if args.headless:
             roi = (0, 0, w, h)
         else:
             roi = cv2.selectROI("Crop final video", orig_frame, showCrosshair=False)
-            if roi == (0,0,0,0): roi = (0,0,w,h)
+            if roi == (0,0,0,0):roi = (0,0,w,h)
             cv2.destroyAllWindows()
         cropped_roi = orig_frame[int(roi[1]):int(roi[1]+roi[3]), int(roi[0]):int(roi[0]+roi[2])]
         full_frames = [cropped_roi]
         orig_h, orig_w = cropped_roi.shape[:-1]
         target_id = select_specific_face(detector, cropped_roi, 256, crop_scale=1)
-            
     else:
         video_stream = cv2.VideoCapture(args.face)
         fps = video_stream.get(cv2.CAP_PROP_FPS)
@@ -191,17 +283,18 @@ def main():
                 video_stream.release()
                 break
             if args.resize_factor > 1:
-                frame = cv2.resize(frame, (frame.shape[1]//args.resize_factor, frame.shape[0]//args.resize_factor))			
+                frame = cv2.resize(frame, (frame.shape[1]//args.resize_factor, frame.shape[0]//args.resize_factor))
             if l == 0:
                 h, w = frame.shape[:-1]
                 if args.headless:
                     roi = (0, 0, w, h)
                 else:
                     roi = cv2.selectROI("Crop final video", frame, showCrosshair=False)
-                    if roi == (0,0,0,0): roi = (0,0,w,h)
+                    if roi == (0,0,0,0):roi = (0,0,w,h)
                     cv2.destroyAllWindows()
                 cropped_roi = frame[int(roi[1]):int(roi[1]+roi[3]), int(roi[0]):int(roi[0]+roi[2])]
-                # os.system('cls') # Remove for Colab/Unix compatibility
+                if not args.headless:
+                    os.system('cls' if os.name == 'nt' else 'clear')
                 target_id = select_specific_face(detector, cropped_roi, 256, crop_scale=1)
                 orig_h, orig_w = cropped_roi.shape[:-1]
                 print("Reading frames....")
@@ -209,14 +302,15 @@ def main():
             cropped_roi = frame[int(roi[1]):int(roi[1]+roi[3]), int(roi[0]):int(roi[0]+roi[2])]
             full_frames.append(cropped_roi)
             orig_frames.append(cropped_roi)
-
-    # --------- PREPROCESS AUDIO AND MEL ----------
+    memory_usage_bytes = sum(frame.nbytes for frame in full_frames)
+    memory_usage_mb = memory_usage_bytes / (1024**2)
+    print ("Number of frames used for inference: " + str(len(full_frames)) + " / ~ " + str(int(memory_usage_mb)) + " mb memory usage")
     print('Extracting raw audio...')
-    os.makedirs('temp', exist_ok=True)
+    os.makedirs("temp", exist_ok=True)
     subprocess.run(['ffmpeg', '-y', '-i', args.audio, '-ac', '1', '-strict', '-2', 'temp/temp.wav'])
-
+    if not args.headless:
+        os.system('cls' if os.name == 'nt' else 'clear')
     print('Raw audio extracted')
-
     if args.denoise:
         print('Denoising audio...')
         wav, sr = librosa.load('temp/temp.wav', sr=44100, mono=True)
@@ -228,28 +322,23 @@ def main():
                 gc.collect()
         except:
             pass
-
     wav = audio.load_wav('temp/temp.wav', 16000)
     mel = audio.melspectrogram(wav)
     if np.isnan(mel.reshape(-1)).sum() > 0:
         raise ValueError('Mel contains nan! Using a TTS voice? Add a small epsilon noise to the wav file and try again')
-
     mel_chunks = []
-    mel_idx_multiplier = 80. / fps
+    mel_idx_multiplier = 80./fps 
     i = 0
-    while True:
+    while 1:
         start_idx = int(i * mel_idx_multiplier)
         if start_idx + mel_step_size > len(mel[0]):
             mel_chunks.append(mel[:, len(mel[0]) - mel_step_size:])
             break
-        mel_chunks.append(mel[:, start_idx: start_idx + mel_step_size])
+        mel_chunks.append(mel[:, start_idx : start_idx + mel_step_size])
         i += 1
     print("Length of mel chunks: {}".format(len(mel_chunks)))
     full_frames = full_frames[:len(mel_chunks)]
-
-    # --------- FACE DETECTION ---------
     aligned_faces, sub_faces, matrix, no_face = face_detect(full_frames, target_id)
-
     if args.pingpong:
         orig_frames = orig_frames + orig_frames[::-1]
         full_frames = full_frames + full_frames[::-1]
@@ -257,12 +346,123 @@ def main():
         sub_faces = sub_faces + sub_faces[::-1]
         matrix = matrix + matrix[::-1]
         no_face = no_face + no_face[::-1]
-
-    # --------- GENERATOR ---------
     gen = datagen(sub_faces.copy(), mel_chunks)
-
-    # --------- REST OF INFERENCE LOOP (UNCHANGED) ---------
-    # ... (Your full existing inference code here) ...
+    fc = 0
+    model = load_model(device)
+    frame_h, frame_w = full_frames[0].shape[:-1]
+    os.makedirs("temp", exist_ok=True)
+    out = cv2.VideoWriter('temp/temp.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (orig_w, orig_h))
+    if not args.headless:
+        os.system('cls' if os.name == 'nt' else 'clear')
+    print('Running on ' + onnxruntime.get_device())
+    print ('Checkpoint: ' + args.checkpoint_path)
+    print ('Resize factor: ' + str(args.resize_factor))
+    if args.pingpong: print ('Use pingpong')
+    if args.enhancer != 'none': print ('Use ' + args.enhancer)
+    if args.face_mask: print ('Use face mask')
+    if args.face_occluder: print ('Use occlusion mask')
+    print ('')
+    fade_in = 11
+    total_length = int(np.ceil(float(len(mel_chunks))))
+    fade_out = total_length - 11
+    bright_in = 0
+    bright_out = 0
+    for i, (img_batch, mel_batch, frames) in enumerate(tqdm(gen, total=int(np.ceil(float(len(mel_chunks)))))):
+        if fc == (len(full_frames)):
+            fc = 0
+        face_err = no_face[fc]
+        img_batch = img_batch.transpose((0, 3, 1, 2)).astype(np.float32)
+        mel_batch = mel_batch.transpose((0, 3, 1, 2)).astype(np.float32)
+        pred = model.run(None,{'mel_spectrogram':mel_batch, 'video_frames':img_batch})[0][0]
+        pred = pred.transpose(1, 2, 0)*255
+        pred = pred.astype(np.uint8)
+        pred = pred.reshape((1, args.img_size, args.img_size, 3))		
+        mat = matrix[fc]
+        mat_rev = cv2.invertAffineTransform(mat)
+        aligned_face = aligned_faces[fc]
+        aligned_face_orig = aligned_face.copy()
+        p_aligned = aligned_face.copy()
+        full_frame = full_frames[fc]
+        final = orig_frames[fc]
+        for p, f in zip(pred, frames):
+            if not args.static: fc = fc + 1
+            if args.face_mode == 0:
+                p = cv2.resize(p,(132,176))
+            else:
+                p = cv2.resize(p,(172,176))
+            if args.face_mode == 0:
+                p_aligned[65-(padY):241-(padY),62:194] = p
+            else:
+                p_aligned[65-(padY):241-(padY),42:214] = p
+            aligned_face = (sub_face_mask * p_aligned + (1 - sub_face_mask) * aligned_face_orig).astype(np.uint8)
+            if face_err != 0:
+                res = full_frame
+                face_err = 0
+            else:
+                if args.enhancer != 'none':      
+                    aligned_face_enhanced = enhancer.enhance(aligned_face)
+                    aligned_face_enhanced = cv2.resize(aligned_face_enhanced,(256,256))
+                    aligned_face = cv2.addWeighted(aligned_face_enhanced.astype(np.float32),blend, aligned_face.astype(np.float32), 1.-blend, 0.0)        
+                if args.face_mask:
+                    seg_mask = masker.mask(aligned_face)
+                    seg_mask = cv2.blur(seg_mask,(5,5))					
+                    seg_mask = seg_mask /255
+                    mask = cv2.warpAffine(seg_mask, mat_rev,(frame_w, frame_h))
+                if args.face_occluder:
+                    try:
+                        seg_mask = occluder.mask(aligned_face_orig)
+                        seg_mask = cv2.cvtColor(seg_mask, cv2.COLOR_GRAY2RGB)					
+                        mask = cv2.warpAffine(seg_mask, mat_rev,(frame_w, frame_h))
+                    except:
+                        seg_mask = occluder.mask(aligned_face) #xseg
+                        seg_mask = cv2.cvtColor(seg_mask, cv2.COLOR_GRAY2RGB)					
+                        mask = cv2.warpAffine(seg_mask, mat_rev,(frame_w, frame_h))
+                if not args.face_mask and not args.face_occluder:
+                    mask = cv2.warpAffine(static_face_mask, mat_rev,(frame_w, frame_h))		
+                if args.sharpen:
+                    aligned_face = cv2.detailEnhance(aligned_face, sigma_s=1.3, sigma_r=0.15)
+                dealigned_face =  cv2.warpAffine(aligned_face, mat_rev, (frame_w, frame_h))
+                res = (mask * dealigned_face + (1 - mask) * full_frame).astype(np.uint8)
+            final = res
+            if args.frame_enhancer:
+                final = frame_enhancer.enhance(final)
+                final = cv2.resize(final,(orig_w, orig_h), interpolation=cv2.INTER_AREA)
+            if i < 11 and args.fade:
+                final = cv2.convertScaleAbs(final, alpha=0 + (0.1 * bright_in), beta=0)
+                bright_in = bright_in + 1		
+            if i > fade_out and args.fade:
+                final = cv2.convertScaleAbs(final, alpha=1 - (0.1 * bright_out), beta=0)
+                bright_out = bright_out + 1
+            if args.hq_output:
+                cv2.imwrite(os.path.join('./hq_temp', '{:0>7d}.png'.format(i)), final)
+            else:	
+                out.write(final)
+            if args.preview and not args.headless:
+                cv2.imshow("Result - press ESC to stop and save",final)
+                k = cv2.waitKey(1)
+                if k == 27:
+                    cv2.destroyAllWindows()
+                    out.release()
+                    break
+                if k == ord('s'):
+                    if args.sharpen == False:
+                        args.sharpen = True
+                    else:
+                        args.sharpen = False
+                    print ('')    
+                    print ("Sharpen = " + str(args.sharpen))
+    out.release()
+    if args.hq_output:
+        command = 'ffmpeg -y -i ' + '"' + args.audio + '"' + ' -r ' + str(fps) + ' -f image2 -i ' + '"' + './hq_temp/' + '%07d.png' + '"' + ' -shortest -vcodec libx264 -pix_fmt yuv420p -crf 5 -preset slow -acodec libmp3lame -ac 2 -ar 44100 -ab 128000 -strict -2 ' + '"' + args.outfile + '"'
+    else:						
+        command = 'ffmpeg -y -i ' + '"' + args.audio + '"' + ' -i ' + 'temp/temp.mp4' + ' -shortest -vcodec copy -acodec libmp3lame -ac 2 -ar 44100 -ab 128000 -strict -2 ' + '"' + args.outfile + '"'
+    subprocess.call(command, shell=True)
+    if os.path.exists('temp/temp.mp4'):
+        os.remove('temp/temp.mp4')
+    if os.path.exists('temp/temp.wav'):
+        os.remove('temp/temp.wav')		
+    if  os.path.exists('hq_temp'):
+        shutil.rmtree('hq_temp')	
 
 if __name__ == '__main__':
     main()
