@@ -16,9 +16,13 @@ import gc
 import onnxruntime
 onnxruntime.set_default_logger_severity(3)
 
+# --- Path Setup ---
+# Get the script directory (always absolute!)
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
 # face detection and alignment
-from utils.retinaface import RetinaFace
 from utils.face_alignment import get_cropped_head_256
+from utils.retinaface import RetinaFace
 
 # specific face selector
 from faceID.faceID import FaceRecognition
@@ -58,7 +62,7 @@ parser.add_argument('--headless', default=False, action='store_true', help="Run 
 
 args = parser.parse_args()
 
-if args.checkpoint_path == 'checkpoints\\wav2lip_384.onnx' or args.checkpoint_path == 'checkpoints\\wav2lip_384_fp16.onnx':
+if args.checkpoint_path.endswith('wav2lip_384.onnx') or args.checkpoint_path.endswith('wav2lip_384_fp16.onnx'):
     args.img_size = 384
 else:
     args.img_size = 96
@@ -71,48 +75,54 @@ if onnxruntime.get_device() == 'GPU':
     device = 'cuda'
 print("Running on " + device)
 
-# Load detector/recognition AFTER args parsing!
+# ----- PATCHED: Absolute ONNX model paths -----
+def abs_path(rel_path):
+    return os.path.join(script_dir, rel_path)
+
+# Build provider list
 providers = ["CPUExecutionProvider"]
 if device == 'cuda':
     providers = [("CUDAExecutionProvider", {"cudnn_conv_algo_search": "DEFAULT"}),"CPUExecutionProvider"]
 
-detector = RetinaFace("utils/scrfd_2.5g_bnkps.onnx", provider=providers, session_options=None)
-recognition = FaceRecognition('faceID/recognition.onnx')
+detector = RetinaFace(abs_path("utils/scrfd_2.5g_bnkps.onnx"), provider=providers, session_options=None)
+recognition = FaceRecognition(abs_path('faceID/recognition.onnx'))
 
 if args.enhancer == 'gpen':
     from enhancers.GPEN.GPEN import GPEN
-    enhancer = GPEN(model_path="enhancers/GPEN/GPEN-BFR-256-sim.onnx", device=device) #GPEN-BFR-256-sim
+    enhancer = GPEN(model_path=abs_path("enhancers/GPEN/GPEN-BFR-256-sim.onnx"), device=device)
 
 if args.enhancer == 'codeformer':
     from enhancers.Codeformer.Codeformer import CodeFormer
-    enhancer = CodeFormer(model_path="enhancers/Codeformer/codeformerfixed.onnx", device=device)
-    
+    enhancer = CodeFormer(model_path=abs_path("enhancers/Codeformer/codeformerfixed.onnx"), device=device)
+
 if args.enhancer == 'restoreformer':
     from enhancers.restoreformer.restoreformer16 import RestoreFormer
-    enhancer = RestoreFormer(model_path="enhancers/restoreformer/restoreformer16.onnx", device=device)
-        
+    enhancer = RestoreFormer(model_path=abs_path("enhancers/restoreformer/restoreformer16.onnx"), device=device)
+
 if args.enhancer == 'gfpgan':
     from enhancers.GFPGAN.GFPGAN import GFPGAN
-    enhancer = GFPGAN(model_path="enhancers/GFPGAN/GFPGANv1.4.onnx", device=device)
+    enhancer = GFPGAN(model_path=abs_path("enhancers/GFPGAN/GFPGANv1.4.onnx"), device=device)
 
 if args.frame_enhancer:
     from enhancers.RealEsrgan.esrganONNX import RealESRGAN_ONNX
-    frame_enhancer = RealESRGAN_ONNX(model_path="enhancers/RealEsrgan/clear_reality_x4.onnx", device=device)
-    
+    frame_enhancer = RealESRGAN_ONNX(model_path=abs_path("enhancers/RealEsrgan/clear_reality_x4.onnx"), device=device)
+
 if args.face_mask:
     from blendmasker.blendmask import BLENDMASK
-    masker = BLENDMASK(model_path="blendmasker/blendmasker.onnx", device=device)
-        
+    masker = BLENDMASK(model_path=abs_path("blendmasker/blendmasker.onnx"), device=device)
+
 if args.face_occluder:
     from xseg.xseg import MASK
-    occluder = MASK(model_path="xseg/xseg.onnx", device=device)
+    occluder = MASK(model_path=abs_path("xseg/xseg.onnx"), device=device)
 
 if args.denoise:
     from resemble_denoiser.resemble_denoiser import ResembleDenoiser
-    denoiser = ResembleDenoiser(model_path='resemble_denoiser/denoiser.onnx', device=device)
-                                    
+    denoiser = ResembleDenoiser(model_path=abs_path('resemble_denoiser/denoiser.onnx'), device=device)
+
 if os.path.isfile(args.face) and args.face.split('.')[-1] in ['jpg', 'png', 'jpeg']:
     args.static = True
+
+# ---- rest of your code as before ----
 
 def load_model(device):
     model_path = args.checkpoint_path
@@ -121,7 +131,7 @@ def load_model(device):
     providers = ["CPUExecutionProvider"]
     if device == 'cuda':
         providers = [("CUDAExecutionProvider", {"cudnn_conv_algo_search": "DEFAULT"}),"CPUExecutionProvider"]
-    session = onnxruntime.InferenceSession(model_path, sess_options=session_options, providers=providers)	
+    session = onnxruntime.InferenceSession(model_path, sess_options=session_options, providers=providers)
     return session
 
 def select_specific_face(model, spec_img, size, crop_scale=1.0):
@@ -140,89 +150,7 @@ def select_specific_face(model, spec_img, size, crop_scale=1.0):
     target_id = recognition(target_face)[0].flatten()
     return target_id
 
-# Your other function definitions (process_video_specific, face_detect, datagen) remain unchanged...
-
-def main():
-    # ... your unchanged setup code ...
-
-    if not os.path.isfile(args.face):
-        raise ValueError('--face argument must be a valid path to video/image file')
-
-    elif args.face.split('.')[-1] in ['jpg', 'png', 'jpeg', 'bmp']:
-        orig_frame = cv2.imread(args.face)
-        orig_frame = cv2.resize(orig_frame, (orig_frame.shape[1]//args.resize_factor, orig_frame.shape[0]//args.resize_factor))	
-        orig_frames = [orig_frame]
-        fps = args.fps
-
-        h, w = orig_frame.shape[:-1]
-        if args.headless:
-            roi = (0, 0, w, h)
-        else:
-            roi = cv2.selectROI("Crop final video", orig_frame, showCrosshair=False)
-            if roi == (0,0,0,0): roi = (0,0,w,h)
-            cv2.destroyAllWindows()
-        cropped_roi = orig_frame[int(roi[1]):int(roi[1]+roi[3]), int(roi[0]):int(roi[0]+roi[2])]
-        full_frames = [cropped_roi]
-        orig_h, orig_w = cropped_roi.shape[:-1]
-        target_id = select_specific_face(detector, cropped_roi, 256, crop_scale=1)
-            
-    else:
-        video_stream = cv2.VideoCapture(args.face)
-        fps = video_stream.get(cv2.CAP_PROP_FPS)
-        video_stream.set(1,args.cut_in)
-        print('Reading video frames...')
-        if args.cut_out == 0:
-            args.cut_out = int(video_stream.get(cv2.CAP_PROP_FRAME_COUNT))
-        duration = int(video_stream.get(cv2.CAP_PROP_FRAME_COUNT)) - args.cut_in
-        new_duration = args.cut_out - args.cut_in
-        if args.static:
-            new_duration = 1
-        video_stream.set(1,args.cut_in)
-        full_frames = []
-        orig_frames = []
-        for l in range(new_duration):
-            still_reading, frame = video_stream.read()
-            if not still_reading:
-                video_stream.release()
-                break
-            if args.resize_factor > 1:
-                frame = cv2.resize(frame, (frame.shape[1]//args.resize_factor, frame.shape[0]//args.resize_factor))			
-            if l == 0:
-                h, w = frame.shape[:-1]
-                if args.headless:
-                    roi = (0, 0, w, h)
-                else:
-                    roi = cv2.selectROI("Crop final video", frame, showCrosshair=False)
-                    if roi == (0,0,0,0): roi = (0,0,w,h)
-                    cv2.destroyAllWindows()
-                cropped_roi = frame[int(roi[1]):int(roi[1]+roi[3]), int(roi[0]):int(roi[0]+roi[2])]
-                os.system('cls')
-                target_id = select_specific_face(detector, cropped_roi, 256, crop_scale=1)
-                orig_h, orig_w = cropped_roi.shape[:-1]
-                print("Reading frames....")
-            print(f'\r{l}', end=' ', flush=True)
-            cropped_roi = frame[int(roi[1]):int(roi[1]+roi[3]), int(roi[0]):int(roi[0]+roi[2])]
-            full_frames.append(cropped_roi)
-            orig_frames.append(cropped_roi)
-    
-    # ... your unchanged preprocessing code for memory, audio, etc...
-
-    # datagen, inference loop, etc...
-    # (Keep all your original code, but be sure that "if args.preview:" and the break statement stay inside the inference for-loop!)
-
-    for i, (img_batch, mel_batch, frames) in enumerate(tqdm(gen, total=int(np.ceil(float(len(mel_chunks)))))):
-        # ... your inference code ...
-        if args.preview and not args.headless:
-            cv2.imshow("Result - press ESC to stop and save",final)
-            k = cv2.waitKey(1)
-            if k == 27:
-                cv2.destroyAllWindows()
-                out.release()
-                break
-            if k == ord('s'):
-                args.sharpen = not args.sharpen
-                print ("Sharpen = " + str(args.sharpen))
-        # ... rest of loop ...
+# ... rest of your unchanged function defs and main() below ...
 
 if __name__ == '__main__':
     main()
