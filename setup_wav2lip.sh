@@ -3,8 +3,8 @@ set -e
 
 # ---------- PREPARE SYSTEM ----------
 echo "Updating and installing dependencies..."
-sudo apt-get update
-sudo apt-get install -y python3 python3-pip ffmpeg libsndfile1 git wget
+apt-get update
+apt-get install -y python3 python3-pip ffmpeg libsndfile1 git wget
 
 # ---------- PYTHON PACKAGES ----------
 echo "Upgrading pip and installing Python dependencies..."
