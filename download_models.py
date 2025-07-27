@@ -3,7 +3,8 @@ import shutil
 from huggingface_hub import hf_hub_download
 
 REPO_ID = "cyberpunkpor/wav2lip-onnx-HQ"
-DEST_ROOT = os.getcwd()  # dynamically set to current dir
+# Set destination root to the folder where this script resides (repo root)
+DEST_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 def ensure_dir(path):
     os.makedirs(path, exist_ok=True)
