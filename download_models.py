@@ -10,6 +10,14 @@ def ensure_dir(path):
     os.makedirs(path, exist_ok=True)
 
 def fetch_and_place(repo_subpath):
+    print("========= DEBUG INFO =========")
+    print("PWD:", os.getcwd())
+    print("__file__:", __file__)
+    print("DEST_ROOT:", os.path.dirname(os.path.abspath(__file__)))
+    print("sys.executable:", sys.executable)
+    print("==============================")
+
+
     local_path = os.path.join(DEST_ROOT, repo_subpath)
     ensure_dir(os.path.dirname(local_path))
     print(f"⬇️ Downloading: {repo_subpath}")
