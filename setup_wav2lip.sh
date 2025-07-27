@@ -26,17 +26,11 @@ python3 -m pip install --no-cache-dir \
     scikit-image \
     scipy
 
-# ---------- DOWNLOAD MODELS ----------
-echo "Running download_models.py (need HF_TOKEN set in env)..."
-# Copy download_models.py to repo (adjust path if needed)
-cp /workspace/ai-images/wav2liphq/download_models.py /workspace/wav2lip-onnx-HQ/download_models.py
-
 # HuggingFace token must be set as environment variable
 if [ -z "$HF_TOKEN" ]; then
     echo "WARNING: HuggingFace token not set. Set HF_TOKEN env variable if download needs authentication."
 fi
 
-cd /workspace/wav2lip-onnx-HQ
 python3 download_models.py
 
 # ---------- PREP INPUT/OUTPUT DIRS ----------
