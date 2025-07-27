@@ -26,13 +26,6 @@ python3 -m pip install --no-cache-dir \
     scikit-image \
     scipy
 
-# ---------- CLONE REPO ----------
-echo "Cloning wav2lip-onnx-HQ repo..."
-cd /workspace
-if [ ! -d "wav2lip-onnx-HQ" ]; then
-    git clone https://github.com/kodapt/wav2lip-onnx-HQ.git
-fi
-
 # ---------- DOWNLOAD MODELS ----------
 echo "Running download_models.py (need HF_TOKEN set in env)..."
 # Copy download_models.py to repo (adjust path if needed)
