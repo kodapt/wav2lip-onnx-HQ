@@ -97,11 +97,11 @@ if args.enhancer == 'gpen':
 
 if args.enhancer == 'codeformer':
     from enhancers.Codeformer.Codeformer import CodeFormer
-    enhancer = CodeFormer(model_path=absp("enhancers/Codeformer/codeformerfixed.onnx"), device=device)
+    enhancer = CodeFormer(model_path=absp("enhancers/Codeformer/codeformer.onnx"), device=device)
     
 if args.enhancer == 'restoreformer':
     from enhancers.restoreformer.restoreformer16 import RestoreFormer
-    enhancer = RestoreFormer(model_path=absp("enhancers/restoreformer/restoreformer16.onnx"), device=device)
+    enhancer = RestoreFormer(model_path=absp("enhancers/restoreformer/restoreformer.onnx"), device=device)
         
 if args.enhancer == 'gfpgan':
     from enhancers.GFPGAN.GFPGAN import GFPGAN
